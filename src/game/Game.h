@@ -85,4 +85,6 @@ public:
   Algorithm getAlgorithm() const { return algo; }
   void initStatsFile(Algorithm newAlgo);
   void saveSummary();
+  int countReachable(const deque<pair<int, int>> &simSnake,
+                     pair<int, int> startPos);
 };

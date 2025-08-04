@@ -3,6 +3,7 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <queue>
 
 Game::Game(unsigned seed, int rows, int cols)
     : grid(rows, cols), curDirection(Direction::Up), dead(false), rng(seed),
@@ -81,55 +82,136 @@ void Game::update() {
   auto head = snake.front();
   auto result = findPath(foodPos);
   auto path = result.first;
-  auto nodes = result.second;
-  addNodesExplored(nodes);
-  if (path.empty()) {
-    // this condition falls back to chasing the tail
-    auto tail = snake.back();
-    deque<pair<int, int>> tempSnake = snake;
-    tempSnake.pop_back();
-    auto start = chrono::steady_clock::now();
-    std::pair<vector<pair<int, int>>, int> tailResult;
-    if (algo == Algorithm::BFS) {
-      tailResult = bfsGetPath(grid, tempSnake, head, tail);
-    } else {
-      tailResult = aStarGetPath(grid, tempSnake, head, tail);
+  addNodesExplored(result.second); // Add nodes from food path attempt
+
+  bool goToFood = false;
+  if (!path.empty()) {
+    // Simulate the snake state after following the path and eating the food
+    deque<pair<int, int>> new_snake = snake;
+    for (const auto &pos : path) {
+      new_snake.push_front(pos);
     }
+    // Normal moves: pop tail for all but the last step
+    for (size_t i = 0; i < path.size() - 1; ++i) {
+      new_snake.pop_back();
+    }
+
+    // Check if in this new state, we can path from new head to new tail (chase
+    // tail safely)
+    deque<pair<int, int>> temp_body = new_snake;
+    temp_body.pop_back(); // Exclude tail from obstacles
+    auto new_head = new_snake.front();
+    auto new_tail = new_snake.back();
+
+    // Perform the check without adding to stats (this is validation, not main
+    // computation)
+    std::pair<vector<pair<int, int>>, int> check_result;
+    if (algo == Algorithm::BFS) {
+      check_result = bfsGetPath(grid, temp_body, new_head, new_tail);
+    } else {
+      check_result = aStarGetPath(grid, temp_body, new_head, new_tail);
+    }
+
+    if (!check_result.first.empty()) {
+      goToFood = true;
+    }
+  }
+
+  if (!goToFood) {
+    // Start timing for fallback computation
+    auto start = chrono::steady_clock::now();
+
+    // Get possible moves
+    vector<pair<int, int>> possibleMoves;
+    auto neighbors = grid.getNodeNeighbors(head.first, head.second);
+    for (const auto &nei : neighbors) {
+      if (find(snake.begin(), snake.end(), nei) == snake.end()) {
+        possibleMoves.push_back(nei);
+      }
+    }
+
+    if (possibleMoves.empty()) {
+      dead = true;
+      failureDistance = std::abs(head.first - foodPos.first) +
+                        std::abs(head.second - foodPos.second);
+      if (!savedSummary) {
+        saveSummary();
+        savedSummary = true;
+      }
+      return;
+    }
+
+    int maxReachable = -1;
+    double minDist = std::numeric_limits<double>::infinity();
+    pair<int, int> bestMove = {-1, -1};
+    int totalExpanded = 0;
+
+    for (const auto &cand : possibleMoves) {
+      deque<pair<int, int>> newSnake = snake;
+      newSnake.push_front(cand);
+      newSnake.pop_back();
+
+      // Use BFS to count reachable, and count expanded nodes
+      vector<vector<bool>> visited(grid.getRows(),
+                                   vector<bool>(grid.getCols(), false));
+      queue<pair<int, int>> q;
+      q.push(cand);
+      visited[cand.first][cand.second] = true;
+      int reachable = 1;
+      int expanded = 0;
+
+      while (!q.empty()) {
+        auto curr = q.front();
+        q.pop();
+        expanded++;
+
+        auto neis = grid.getNodeNeighbors(curr.first, curr.second);
+        for (const auto &nei : neis) {
+          int ny = nei.first, nx = nei.second;
+          if (ny >= 0 && ny < grid.getRows() && nx >= 0 &&
+              nx < grid.getCols() && !visited[ny][nx] &&
+              find(newSnake.begin(), newSnake.end(), make_pair(ny, nx)) ==
+                  newSnake.end()) {
+            visited[ny][nx] = true;
+            q.push(nei);
+            reachable++;
+          }
+        }
+      }
+
+      totalExpanded += expanded;
+
+      double dist = std::abs(cand.first - foodPos.first) +
+                    std::abs(cand.second - foodPos.second);
+
+      if (reachable > maxReachable ||
+          (reachable == maxReachable && dist < minDist)) {
+        maxReachable = reachable;
+        minDist = dist;
+        bestMove = cand;
+      }
+    }
+
     auto end = chrono::steady_clock::now();
     long long compTime =
         chrono::duration_cast<chrono::microseconds>(end - start).count();
     addCompTime(compTime);
-    addNodesExplored(tailResult.second);
-    path = tailResult.first;
+    addNodesExplored(totalExpanded);
 
-    if (path.empty()) {
-      // no current path found, try continuing in the current direction
-      auto startOfSnakeBody = next(snake.begin());
-      int right = head.second + 1;
-      int up = head.first + 1;
-      int left = head.second - 1;
-      int down = head.first - 1;
-      if (right < grid.getCols() && right != (*startOfSnakeBody).second) {
-        path.push_back({head.first, right});
-      } else if (left >= 0 && left != (*startOfSnakeBody).second) {
-        path.push_back({head.first, left});
-      } else if (up < grid.getRows() && up != (*startOfSnakeBody).first) {
-        path.push_back({up, head.second});
-      } else if (down >= 0 && down != (*startOfSnakeBody).first) {
-        path.push_back({down, head.second});
-      } else {
-        // no valid moves left, game over
-        dead = true;
-        failureDistance = std::abs(head.first - foodPos.first) +
-                          std::abs(head.second - foodPos.second);
-        if (!savedSummary) {
-          saveSummary();
-          savedSummary = true;
-        }
-        return;
+    if (bestMove.first == -1) {
+      dead = true;
+      failureDistance = std::abs(head.first - foodPos.first) +
+                        std::abs(head.second - foodPos.second);
+      if (!savedSummary) {
+        saveSummary();
+        savedSummary = true;
       }
+      return;
     }
+
+    path = {bestMove};
   }
+
   pair<int, int> newHead = path.front();
 
   int rows = grid.getRows();
@@ -306,4 +388,33 @@ void Game::saveSummary() {
   } catch (const std::exception &e) {
     cerr << e.what() << '\n';
   }
+}
+
+int Game::countReachable(const deque<pair<int, int>> &simSnake,
+                         pair<int, int> startPos) {
+  int rows = grid.getRows();
+  int cols = grid.getCols();
+
+  vector<vector<bool>> visited(rows, vector<bool>(cols, false));
+  queue<pair<int, int>> q;
+  q.push(startPos);
+  visited[startPos.first][startPos.second] = true;
+  int count = 1;
+
+  while (!q.empty()) {
+    auto curr = q.front();
+    q.pop();
+    auto neighbors = grid.getNodeNeighbors(curr.first, curr.second);
+    for (const auto &nei : neighbors) {
+      int ny = nei.first, nx = nei.second;
+      if (ny >= 0 && ny < rows && nx >= 0 && nx < cols && !visited[ny][nx] &&
+          find(simSnake.begin(), simSnake.end(), make_pair(ny, nx)) ==
+              simSnake.end()) {
+        visited[ny][nx] = true;
+        q.push({ny, nx});
+        count++;
+      }
+    }
+  }
+  return count;
 }
