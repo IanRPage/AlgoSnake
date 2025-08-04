@@ -1,98 +1,152 @@
 #include <Window.h>
 
-GamePanel::GamePanel(int cellSize)
-{
-  CELL_SIZE = cellSize;
+void GamePanel::render(sf::RenderWindow &window, const Game &game,
+                       float cellSize) {
+  float thickness = 20.0f * scale_factor;
+
+  float grid_width_px = game.getCols() * cellSize;
+  float grid_height_px = game.getRows() * cellSize;
+
+  // draw bg
+  bg.setSize(sf::Vector2f(grid_width_px, grid_height_px));
+  window.draw(bg);
+
+  // bigX setup
+  float diagonal = std::sqrt(grid_width_px * grid_width_px +
+                             grid_height_px * grid_height_px);
+  bigX[0].setSize(sf::Vector2f(diagonal, thickness));
+  bigX[1].setSize(sf::Vector2f(diagonal, thickness));
+  bigX[0].setOrigin(bigX[0].getSize().x / 2.0f, bigX[0].getSize().y / 2.0f);
+  bigX[1].setOrigin(bigX[1].getSize().x / 2.0f, bigX[1].getSize().y / 2.0f);
+  bigX[0].setPosition(grid_width_px / 2.0f, grid_height_px / 2.0f);
+  bigX[1].setPosition(grid_width_px / 2.0f, grid_height_px / 2.0f);
+  bigX[0].setRotation(45.0f);
+  bigX[1].setRotation(-45.0f);
+  bigX[0].setFillColor(sf::Color::Red);
+  bigX[1].setFillColor(sf::Color::Red);
+
+  // draw food
+  sf::CircleShape foodShape(cellSize / 2.0f);
+  foodShape.setFillColor(sf::Color::Red);
+  auto food = game.getFoodPos();
+  foodShape.setPosition(food.second * cellSize, food.first * cellSize);
+  window.draw(foodShape);
+
+  // if dead, draw bigX
+  if (game.isDead()) {
+    window.draw(bigX[0]);
+    window.draw(bigX[1]);
+  }
+
+  // draw snake
+  sf::CircleShape segment(cellSize / 2.0f);
+  const auto &snake = game.getSnake();
+  if (!snake.empty()) {
+    auto it = snake.begin();
+    segment.setFillColor(sf::Color::Magenta);
+    segment.setPosition(it->second * cellSize, it->first * cellSize);
+    window.draw(segment);
+    ++it;
+    segment.setFillColor(sf::Color::Blue);
+    for (; it != snake.end(); ++it) {
+      segment.setPosition(it->second * cellSize, it->first * cellSize);
+      window.draw(segment);
+    }
+  }
+}
+
+StatsPanel::StatsPanel() {
   font.loadFromFile("arial.ttf");
-  bg.setFillColor(sf::Color::Black);
-  statsBg.setFillColor(sf::Color::White);
+  bg.setFillColor(sf::Color::White);
 
   snakeTypeText.setFont(font);
-  snakeTypeText.setCharacterSize(static_cast<unsigned int>(24));
   snakeTypeText.setFillColor(sf::Color::Black);
 
   statsText.setFont(font);
-  statsText.setCharacterSize(static_cast<unsigned int>(24));
   statsText.setFillColor(sf::Color::Black);
 
   elapsedTimeText.setFont(font);
-  elapsedTimeText.setCharacterSize(static_cast<unsigned int>(24));
   elapsedTimeText.setFillColor(sf::Color::Black);
 
   stepsTakenText.setFont(font);
-  stepsTakenText.setCharacterSize(static_cast<unsigned int>(24));
   stepsTakenText.setFillColor(sf::Color::Black);
 
   avgCompTimeText.setFont(font);
-  avgCompTimeText.setCharacterSize(static_cast<unsigned int>(24));
   avgCompTimeText.setFillColor(sf::Color::Black);
 
   aStarTexture.loadFromFile("btn_astar.png");
   aStarTexture_pressed.loadFromFile("btn_astar_pressed.png");
   spriteAstar.setTexture(aStarTexture);
+  spriteAstar.setPosition(0, 0);
 
   bfsTexture.loadFromFile("btn_bfs.png");
   bfsTexture_pressed.loadFromFile("btn_bfs_pressed.png");
   spriteBFS.setTexture(bfsTexture);
-
-  segment.setRadius(CELL_SIZE / 2.0f);
-  foodShape.setRadius(CELL_SIZE / 2.0f);
-  foodShape.setFillColor(sf::Color::Red);
-
-  float width = 400.0f;
-  float height = 400.0f;
-  float diagonal = std::sqrt(width * width + height * height);
-  float thickness = 20.0f;
-
-  bigX[0].setFillColor(sf::Color::Red);
-  bigX[1].setFillColor(sf::Color::Red);
-  bigX[0].setSize(sf::Vector2f(diagonal, thickness));
-  bigX[1].setSize(sf::Vector2f(diagonal, thickness));
-  bigX[0].setOrigin(bigX[0].getSize().x / 2.0f, bigX[0].getSize().y / 2.0f);
-  bigX[1].setOrigin(bigX[1].getSize().x / 2.0f, bigX[1].getSize().y / 2.0f);
-  bigX[0].setRotation(45.0f);
-  bigX[1].setRotation(-45.0f);
+  spriteBFS.setPosition(0, 0);
 }
 
-void GamePanel::render(sf::RenderWindow &window, const Game &game)
-{
-  int rows = game.getRows();
-  int cols = game.getCols();
-  bigX[0].setPosition((cols * CELL_SIZE) / 2.0f, (rows * CELL_SIZE) / 2.0f);
-  bigX[1].setPosition((cols * CELL_SIZE) / 2.0f, (rows * CELL_SIZE) / 2.0f);
-  bg.setSize(sf::Vector2f(cols * CELL_SIZE, rows * CELL_SIZE));
+void StatsPanel::render(sf::RenderWindow &window, const Game &game,
+                        float cellSize, float panelHeight) {
+  float char_size = 24.0f * scale_factor;
+  float border_margin = 10.0f * scale_factor;
+
+  float grid_width_px = game.getCols() * cellSize;
+  float grid_height_px = game.getRows() * cellSize;
 
   // gui and stats panel
-  statsBg.setSize(sf::Vector2f(cols * CELL_SIZE, 250.0f));
-  statsBg.setPosition(0, rows * CELL_SIZE);
+  bg.setSize(sf::Vector2f(grid_width_px, panelHeight));
+  bg.setPosition(0, grid_height_px);
+
+  // set character sizes
+  snakeTypeText.setCharacterSize(static_cast<unsigned int>(char_size));
+  statsText.setCharacterSize(static_cast<unsigned int>(char_size));
+  elapsedTimeText.setCharacterSize(static_cast<unsigned int>(char_size));
+  stepsTakenText.setCharacterSize(static_cast<unsigned int>(char_size));
+  avgCompTimeText.setCharacterSize(static_cast<unsigned int>(char_size));
+
+  // set string text and initial positions
+  float text_height = snakeTypeText.getGlobalBounds().height;
 
   Algorithm chosenAlgo = game.getAlgorithm();
-  string snakeType = "None";
+  std::string snakeType = "None";
   if (chosenAlgo == Algorithm::BFS)
     snakeType = "BFS";
   else if (chosenAlgo == Algorithm::AStar)
     snakeType = "A* Search";
-
   snakeTypeText.setString("Snake Type: " + snakeType);
-  snakeTypeText.setPosition(10.0f, rows * CELL_SIZE + 10.0f);
+  snakeTypeText.setPosition(border_margin, grid_height_px + border_margin);
 
   statsText.setString("Food Eaten: " + std::to_string(game.getFoodsEaten()));
-  statsText.setPosition(10.0f, rows * CELL_SIZE + 50.0f);
+  statsText.setPosition(border_margin,
+                        grid_height_px + text_height + 2 * border_margin);
 
-  elapsedTimeText.setString("Elapsed Time: " + std::to_string(game.getElapsedTime()) + " s");
-  elapsedTimeText.setPosition(10.0f, rows * CELL_SIZE + 90.0f);
+  elapsedTimeText.setString(
+      "Elapsed Time: " + std::to_string(game.getElapsedTime()) + " s");
+  elapsedTimeText.setPosition(border_margin, grid_height_px + 2 * text_height +
+                                                 3 * border_margin);
 
-  stepsTakenText.setString("Steps Taken: " + std::to_string(game.getStepsTaken()));
-  stepsTakenText.setPosition(10.0f, rows * CELL_SIZE + 130.0f);
+  stepsTakenText.setString("Steps Taken: " +
+                           std::to_string(game.getStepsTaken()));
+  stepsTakenText.setPosition(border_margin, grid_height_px + 3 * text_height +
+                                                4 * border_margin);
 
-  avgCompTimeText.setString("Avg Computation Time: " + std::to_string(game.getAvgCompTime()) + " ns");
-  avgCompTimeText.setPosition(10.0f, rows * CELL_SIZE + 170.0f);
+  avgCompTimeText.setString(
+      "Avg Computation Time: " + std::to_string(game.getAvgCompTime()) + " ns");
+  avgCompTimeText.setPosition(border_margin, grid_height_px + 4 * text_height +
+                                                 5 * border_margin);
 
-  spriteAstar.setPosition(cols * CELL_SIZE - 210, rows * CELL_SIZE + 10);
-  spriteBFS.setPosition(cols * CELL_SIZE - 210, rows * CELL_SIZE + 120);
+  // button scale and placement
+  spriteAstar.setScale(scale_factor, scale_factor);
+  spriteBFS.setScale(scale_factor, scale_factor);
+  float btnWidth = spriteAstar.getGlobalBounds().width;
+  float btnHeight = spriteAstar.getGlobalBounds().height;
+  float button_x = grid_width_px - btnWidth - border_margin;
+  spriteAstar.setPosition(button_x, grid_height_px + border_margin);
+  spriteBFS.setPosition(button_x,
+                        grid_height_px + btnHeight + 2 * border_margin);
 
   window.draw(bg);
-  window.draw(statsBg);
+  window.draw(bg);
   window.draw(snakeTypeText);
   window.draw(statsText);
   window.draw(elapsedTimeText);
@@ -100,50 +154,18 @@ void GamePanel::render(sf::RenderWindow &window, const Game &game)
   window.draw(avgCompTimeText);
   window.draw(spriteAstar);
   window.draw(spriteBFS);
-
-  // draw food
-  auto food = game.getFoodPos();
-  foodShape.setPosition(food.second * CELL_SIZE, food.first * CELL_SIZE);
-  window.draw(foodShape);
-
-  // if dead, draw bigX
-  if (game.isDead())
-  {
-    window.draw(bigX[0]);
-    window.draw(bigX[1]);
-  }
-
-  // draw snake
-  const auto &snake = game.getSnake();
-  if (!snake.empty())
-  {
-    auto it = snake.begin();
-    segment.setFillColor(sf::Color::Magenta);
-    segment.setPosition(it->second * CELL_SIZE, it->first * CELL_SIZE);
-    window.draw(segment);
-    ++it;
-    segment.setFillColor(sf::Color::Blue);
-    for (; it != snake.end(); ++it)
-    {
-      segment.setPosition(it->second * CELL_SIZE, it->first * CELL_SIZE);
-      window.draw(segment);
-    }
-  }
 }
 
-void UI::render(sf::RenderWindow &window, const Game &game)
-{
-  gamePanel.render(window, game);
+void UI::render(sf::RenderWindow &window, const Game &game) {
+  gamePanel.render(window, game, cellSize);
+  statsPanel.render(window, game, cellSize, panelHeight);
 }
 
-void UI::handleEvent(const sf::Event &event, Game &game)
-{
-  // supports arrow keys or WASD
+void UI::handleEvent(const sf::Event &event, Game &game) {
   bool buttonPressed = false;
-  if (event.type == sf::Event::KeyPressed && game.getAlgorithm() == Algorithm::None)
-  {
-    switch (event.key.code)
-    {
+  if (event.type == sf::Event::KeyPressed &&
+      game.getAlgorithm() == Algorithm::None) {
+    switch (event.key.code) {
     case sf::Keyboard::Up:
     case sf::Keyboard::W:
       game.setDirection(Direction::Up);
@@ -163,53 +185,31 @@ void UI::handleEvent(const sf::Event &event, Game &game)
     default:
       break;
     }
-  }
-  else if (event.type == sf::Event::MouseButtonPressed)
-  {
-    if (event.mouseButton.button == sf::Mouse::Left && (game.getAlgorithm() == Algorithm::None || game.isDead()))
-    {
-      if (gamePanel.getAStarSprite().getGlobalBounds().contains(event.mouseButton.x, event.mouseButton.y))
-      {
-        buttonPressed = true;
-        gamePanel.pressAStarButton();
-        if (game.isDead())
-        {
-          game.reset(Algorithm::AStar);
-        }
-        else
-        {
-          game.initStatsFile(Algorithm::AStar);
-          game.setAlgorithm(Algorithm::AStar);
-        }
-      }
-      else if (gamePanel.getBFSSprite().getGlobalBounds().contains(event.mouseButton.x, event.mouseButton.y))
-      {
-        buttonPressed = true;
-        gamePanel.pressBFSButton();
-        if (game.isDead())
-        {
-          game.reset(Algorithm::BFS);
-        }
-        else
-        {
-          game.initStatsFile(Algorithm::BFS);
-          game.setAlgorithm(Algorithm::BFS);
-        }
-      }
+  } else if (event.type == sf::Event::MouseButtonPressed) {
+    if (statsPanel.getAStarSprite().getGlobalBounds().contains(
+            event.mouseButton.x, event.mouseButton.y)) {
+      buttonPressed = true;
+      statsPanel.pressAStarButton();
+      statsPanel.pressedButton = StatsPanel::ButtonType::AStar;
+      game.reset(Algorithm::AStar);
+    } else if (statsPanel.getBFSSprite().getGlobalBounds().contains(
+                   event.mouseButton.x, event.mouseButton.y)) {
+      buttonPressed = true;
+      statsPanel.pressBFSButton();
+      statsPanel.pressedButton = StatsPanel::ButtonType::BFS;
+      game.reset(Algorithm::BFS);
     }
+  } else if (event.type == sf::Event::MouseButtonReleased) {
+    if (statsPanel.pressedButton == StatsPanel::ButtonType::AStar) {
+      statsPanel.depressAStarButton();
+    } else if (statsPanel.pressedButton == StatsPanel::ButtonType::BFS) {
+      statsPanel.depressBFSButton();
+    }
+    statsPanel.pressedButton = StatsPanel::ButtonType::None;
   }
 
-  if (!buttonPressed)
-  {
-    gamePanel.depressAStarButton();
-    gamePanel.depressBFSButton();
-  }
-
-  if (!buttonPressed)
-  {
-    gamePanel.depressAStarButton();
-    gamePanel.depressBFSButton();
+  if (!buttonPressed) {
+    statsPanel.depressAStarButton();
+    statsPanel.depressBFSButton();
   }
 }
-
-void UI::update(const Game &game) {}

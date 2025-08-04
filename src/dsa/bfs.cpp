@@ -1,5 +1,5 @@
-#include <Graph.h>
 #include <Game.h>
+#include <Graph.h>
 #include <algorithm>
 #include <queue>
 #include <unordered_map>
@@ -42,11 +42,8 @@ vector<pair<int, int>> bfsGetPath(const Graph<CellType> &graph,
         continue;
       if (visited[ny][nx])
         continue;
-			// avoid snake body (except tail)
+      // avoid snake body (except tail)
       if (find(snake.begin(), snake.end(), make_pair(ny, nx)) != snake.end())
-        continue;
-      // avoid obstacles
-      if (graph.getMatrixNode(ny, nx) == CellType::Obstacle)
         continue;
 
       visited[ny][nx] = true;
@@ -58,7 +55,7 @@ vector<pair<int, int>> bfsGetPath(const Graph<CellType> &graph,
   if (!found)
     return {};
 
-  // Reconstruct path
+  // reconstruct path
   vector<pair<int, int>> path;
   auto curr = target;
   while (curr != start) {

@@ -4,65 +4,73 @@
 #include <fstream>
 using namespace std;
 
-int main()
-{
+float scale_factor;
+
+int main() {
   // read config file
   ifstream configFile("game.config");
-  if (!configFile.is_open())
-  {
+  if (!configFile.is_open()) {
     throw runtime_error("Failed to open game.config");
   }
 
-  int cellCount = 0;
-  configFile >> cellCount;
-  if (cellCount == 0)
-  {
+  int cell_count = 0;
+  configFile >> cell_count;
+  if (cell_count == 0) {
     throw runtime_error("Invalid row count in game.config");
   }
 
-  int frameRate = 0;
-  ;
-  configFile >> frameRate;
-  if (frameRate == 0)
-  {
+  int frame_rate = 0;
+  configFile >> frame_rate;
+  if (frame_rate == 0) {
     throw runtime_error("Invalid frame rate in game.config");
   }
 
-  Game game(42, cellCount, cellCount);
+  // define base sizes
+  const int BASE_CELL_SIZE = 20;
+  const int BASE_PANEL_HEIGHT = 300;
+  int base_width = cell_count * BASE_CELL_SIZE;
+  int base_height = cell_count * BASE_CELL_SIZE + BASE_PANEL_HEIGHT;
 
-  int cellSize = 0;
-  configFile >> cellSize;
-  if (cellSize == 0)
-  {
-    throw runtime_error("Invalid cell size in game.config");
-  }
-  UI ui(cellSize);
+  // get desktop resolution and compute scale
+  sf::VideoMode desktop = sf::VideoMode::getDesktopMode();
+  float desktopResolution = 0.90f; // % of desktop resolution
+  float max_w = static_cast<float>(desktop.width) * desktopResolution;
+  float max_h = static_cast<float>(desktop.height) * desktopResolution;
+  scale_factor =
+      std::min(1.0f, std::min(max_w / base_width, max_h / base_height));
 
-  // init setup
-  int width = game.getCols() * ui.getCellSize();
-  int height = game.getRows() * ui.getCellSize() + 250; // 250 for gui and stats panel
+  // apply scale to actual sizes
+  float actual_cell_size = BASE_CELL_SIZE * scale_factor;
+  float actual_panel_height = BASE_PANEL_HEIGHT * scale_factor;
+  int width = static_cast<int>(cell_count * actual_cell_size);
+  int height =
+      static_cast<int>(cell_count * actual_cell_size + actual_panel_height);
+
+  // initial setup
+  Game game(42, cell_count, cell_count);
+
+  UI ui(actual_cell_size, actual_panel_height);
 
   sf::RenderWindow window(sf::VideoMode(width, height), "AlgoSnake");
-  window.setFramerateLimit(frameRate);
+  window.setFramerateLimit(frame_rate);
 
-  cout << "Frame rate: " << frameRate << endl;
-  cout << "Cell count: " << cellCount << endl;
-  cout << "Window size: " << width << "x" << height << endl;
+  cout << "Frame rate: " << frame_rate << endl;
+  cout << "Cell count: " << cell_count << endl;
+  cout << "Window size: " << width << "x" << height
+       << " (scale: " << scale_factor << ")" << endl;
   cout << "Game starting..." << endl;
-  while (window.isOpen())
-  {
+
+  // main game loop
+  while (window.isOpen()) {
     sf::Event event;
-    while (window.pollEvent(event))
-    {
-      if (event.type == sf::Event::Closed)
-      {
+    while (window.pollEvent(event)) {
+      if (event.type == sf::Event::Closed) {
         window.close();
       }
       ui.handleEvent(event, game);
     }
 
-    if (game.getAlgorithm() != Algorithm::None)
-    {
+    if (game.getAlgorithm() != Algorithm::None) {
       game.update();
     }
 
